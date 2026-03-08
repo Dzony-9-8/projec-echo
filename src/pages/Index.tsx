@@ -52,6 +52,7 @@ const Index = () => {
           {activeView === "analytics" && <AnalyticsDashboard />}
           {activeView === "prompts" && <PromptLibraryPanel onSelect={handlePromptSelect} />}
           {activeView === "rag" && <RAGPanel />}
+          {activeView === "skills" && <AgentSkillsPanel />}
         </Suspense>
       </main>
     </div>
