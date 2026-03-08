@@ -282,6 +282,7 @@ const ChatView = () => {
     onEscape: () => {
       setShowExport(false);
       setShowSettings(false);
+      setShowShare(false);
       setShowMobileHistory(false);
       setShowMobilePanel(false);
     },
