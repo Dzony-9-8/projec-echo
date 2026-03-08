@@ -178,6 +178,7 @@ const SystemMetrics = () => {
   const cpuName = realMetrics?.cpu.name || overrides.cpuName || null;
   const cpuCores = realMetrics?.cpu.threads || browserInfo.cpuCores;
   const cpuUsage = realMetrics?.cpu.usage_percent ?? null;
+  const cpuTemp = realMetrics?.cpu.temperature_c ?? null;
 
   const ramTotalGB = realMetrics?.ram.total_gb || overrides.ramTotalGB || browserInfo.deviceMemoryGB;
   const ramUsedGB = realMetrics?.ram.used_gb ?? null;
@@ -228,6 +229,13 @@ const SystemMetrics = () => {
             </span>
           </span>
         )}
+        {/* CPU Temp in top bar when live */}
+        {cpuTemp !== null && (
+          <span className={`flex items-center gap-0.5 ${tempTextClass(cpuTemp)}`}>
+            <Thermometer className="w-3 h-3" />
+            {cpuTemp}°C
+          </span>
+        )}
         {/* GPU Temp in top bar when live */}
         {gpuTemp !== null && (
           <span className={`flex items-center gap-0.5 ${tempTextClass(gpuTemp)}`}>
@@ -238,7 +246,7 @@ const SystemMetrics = () => {
       </button>
 
       {expanded && (
-        <div className="absolute top-8 right-0 w-80 border border-border bg-card rounded p-3 z-50 shadow-lg">
+        <div className="absolute top-8 right-0 w-80 border border-border bg-card rounded p-3 z-30 shadow-lg">
           {/* Header */}
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
@@ -287,11 +295,15 @@ const SystemMetrics = () => {
           <div className="space-y-3">
             {/* CPU */}
             {cpuUsage !== null ? (
-              <UsageBar
-                percent={cpuUsage}
-                label={`CPU${cpuName ? ` · ${cpuName}` : ""}`}
-                detail={`${cpuCores} threads`}
-              />
+              <div>
+                <UsageBar
+                  percent={cpuUsage}
+                  label={`CPU${cpuName ? ` · ${cpuName}` : ""}`}
+                  detail={`${cpuCores} threads`}
+                  showTemp={cpuTemp !== null}
+                  tempC={cpuTemp}
+                />
+              </div>
             ) : (
               <div>
                 <div className="flex justify-between text-[10px] font-mono mb-1">
