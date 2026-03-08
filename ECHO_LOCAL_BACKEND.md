@@ -15,8 +15,8 @@
 │                     │   POST /api/chat (SSE)        │                      │
 │  localStorage:      │   GET  /api/health            │   ┌────────────────┐ │
 │  echo_backend_mode  │   GET  /api/system            │   │  Ollama API    │ │
-│  = "local"          │   POST /api/semantic-search   │   │  localhost:11434│ │
-│                     │                               │   └────────────────┘ │
+│  = "local"          │   GET  /api/agents            │   │  localhost:11434│ │
+│                     │   POST /api/semantic-search   │   └────────────────┘ │
 └─────────────────────┘                               └──────────────────────┘
 ```
 
@@ -91,7 +91,85 @@ Returns real-time system metrics. Frontend displays these in the Telemetry view.
 - `temperature_c` can be `null` if sensors unavailable
 - `disk` can be `null`
 
-### 2.3 `POST /api/chat`
+### 2.4 `GET /api/agents`
+
+Returns real-time agent status. Frontend polls this every 5 seconds (local mode only).
+
+**Response (200 OK):**
+```json
+{
+  "agents": [
+    {
+      "name": "Supervisor",
+      "status": "idle",
+      "model": "llama3.1:8b",
+      "currentTask": null,
+      "lastActive": "2024-01-15T10:30:00Z",
+      "tokensProcessed": 1250
+    },
+    {
+      "name": "Researcher",
+      "status": "active",
+      "model": "deepseek-r1:14b",
+      "currentTask": "Analyzing research papers on transformer architectures",
+      "lastActive": "2024-01-15T10:31:00Z",
+      "tokensProcessed": 3400
+    },
+    {
+      "name": "Developer",
+      "status": "idle",
+      "model": "deepseek-coder-v2:16b",
+      "currentTask": null,
+      "lastActive": null,
+      "tokensProcessed": 0
+    },
+    {
+      "name": "Critic",
+      "status": "idle",
+      "model": "deepseek-r1:14b",
+      "currentTask": null,
+      "lastActive": null,
+      "tokensProcessed": 0
+    }
+  ],
+  "activeAgent": "Researcher",
+  "pipeline": ["Supervisor", "Researcher", "Developer", "Critic"]
+}
+```
+
+- `status`: one of `"idle"`, `"active"`, `"processing"`, `"complete"`, `"error"`
+- `activeAgent`: name of the currently processing agent, or `null` if idle
+- `pipeline`: ordered list showing the agent execution sequence
+- `currentTask`: short description of what the agent is doing (shown in UI)
+- Update agent status as requests flow through the multi-agent pipeline
+- Track `tokensProcessed` per agent for analytics
+
+**Implementation notes:**
+```python
+# Global state tracking
+agent_states = {
+    "Supervisor": {"status": "idle", "model": "llama3.1:8b", "currentTask": None, "lastActive": None, "tokensProcessed": 0},
+    "Researcher": {"status": "idle", "model": "deepseek-r1:14b", "currentTask": None, "lastActive": None, "tokensProcessed": 0},
+    "Developer": {"status": "idle", "model": "deepseek-coder-v2:16b", "currentTask": None, "lastActive": None, "tokensProcessed": 0},
+    "Critic": {"status": "idle", "model": "deepseek-r1:14b", "currentTask": None, "lastActive": None, "tokensProcessed": 0},
+}
+
+@app.get("/api/agents")
+async def get_agents():
+    agents = []
+    active = None
+    for name, state in agent_states.items():
+        agents.append({"name": name, **state})
+        if state["status"] in ("active", "processing"):
+            active = name
+    return {
+        "agents": agents,
+        "activeAgent": active,
+        "pipeline": list(agent_states.keys()),
+    }
+```
+
+### 2.5 `POST /api/chat`
 
 The core chat endpoint. **Must support SSE streaming.**
 

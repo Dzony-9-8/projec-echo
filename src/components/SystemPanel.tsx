@@ -16,7 +16,12 @@ import {
   ChevronRight,
   Cloud,
   Server,
+  Crown,
+  Loader2,
+  CheckCircle2,
+  AlertCircle,
 } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   getBackendUrl,
   setBackendUrl,
@@ -26,26 +31,62 @@ import {
   type SystemStatus,
   type BackendMode,
 } from "@/lib/api";
+import { useAgentStatus } from "@/hooks/useAgentStatus";
+import type { AgentStatus } from "@/lib/agentStatus";
 
-const localAgents = [
-  { name: "Supervisor", icon: Brain, model: "LLaMA 3.1", color: "text-primary" },
-  { name: "Research", icon: Search, model: "DeepSeek R1", color: "text-terminal-cyan" },
-  { name: "Coding", icon: Code2, model: "DeepSeek Coder", color: "text-terminal-amber" },
-  { name: "Writing", icon: PenTool, model: "LLaMA 3.1", color: "text-primary" },
-  { name: "Vision", icon: Eye, model: "LLaVA 1.6", color: "text-terminal-magenta" },
-  { name: "Voice", icon: Mic, model: "Whisper / XTTS", color: "text-terminal-cyan" },
-  { name: "Critic", icon: Shield, model: "DeepSeek R1", color: "text-terminal-red" },
-];
+const agentIcons: Record<string, typeof Brain> = {
+  Supervisor: Crown,
+  Research: Search,
+  Researcher: Search,
+  Coding: Code2,
+  Developer: Code2,
+  Writing: PenTool,
+  Vision: Eye,
+  Voice: Mic,
+  Critic: Shield,
+  "ECHO Cloud": Cloud,
+};
 
-const cloudAgents = [
-  { name: "ECHO Cloud", icon: Cloud, model: "Multi-Model", color: "text-terminal-cyan" },
-];
+const agentColorMap: Record<string, string> = {
+  Supervisor: "text-terminal-amber",
+  Research: "text-terminal-cyan",
+  Researcher: "text-terminal-cyan",
+  Coding: "text-terminal-amber",
+  Developer: "text-terminal-cyan",
+  Writing: "text-primary",
+  Vision: "text-terminal-magenta",
+  Voice: "text-terminal-cyan",
+  Critic: "text-terminal-red",
+  "ECHO Cloud": "text-terminal-cyan",
+};
+
+const statusIndicator = (status: AgentStatus["status"]) => {
+  switch (status) {
+    case "active":
+      return (
+        <motion.div
+          className="w-2 h-2 rounded-full bg-primary"
+          animate={{ opacity: [1, 0.3, 1] }}
+          transition={{ repeat: Infinity, duration: 1 }}
+        />
+      );
+    case "processing":
+      return <Loader2 className="w-3 h-3 text-terminal-amber animate-spin" />;
+    case "complete":
+      return <CheckCircle2 className="w-3 h-3 text-primary" />;
+    case "error":
+      return <AlertCircle className="w-3 h-3 text-terminal-red" />;
+    default:
+      return <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground/30" />;
+  }
+};
 
 const SystemPanel = () => {
   const [status, setStatus] = useState<SystemStatus | null>(null);
   const [backendUrl, setUrl] = useState(getBackendUrl());
   const [mode, setMode] = useState<BackendMode>(getBackendMode());
   const [showSettings, setShowSettings] = useState(false);
+  const { agents, activeAgent } = useAgentStatus();
 
   useEffect(() => {
     const check = () => checkHealth().then(setStatus);
@@ -61,7 +102,6 @@ const SystemPanel = () => {
   };
 
   const isOnline = status?.backend === "online";
-  const agents = mode === "cloud" ? cloudAgents : localAgents;
 
   return (
     <div className="w-72 border-l border-border bg-sidebar flex flex-col h-full overflow-hidden">
@@ -204,6 +244,46 @@ const SystemPanel = () => {
           </div>
         )}
 
+        {/* Active Agent Banner */}
+        <AnimatePresence>
+          {activeAgent && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="overflow-hidden"
+            >
+              <div className="p-3 border-b border-primary/30 bg-primary/5">
+                <div className="flex items-center gap-2">
+                  <motion.div
+                    animate={{ rotate: 360 }}
+                    transition={{ repeat: Infinity, duration: 2, ease: "linear" }}
+                  >
+                    <Loader2 className="w-3.5 h-3.5 text-primary" />
+                  </motion.div>
+                  <span className="text-[10px] uppercase tracking-widest text-primary font-mono">
+                    Processing
+                  </span>
+                </div>
+                <div className="mt-1.5 flex items-center gap-2">
+                  {(() => {
+                    const Icon = agentIcons[activeAgent] || Brain;
+                    return <Icon className={`w-4 h-4 ${agentColorMap[activeAgent] || "text-primary"}`} />;
+                  })()}
+                  <span className="text-xs font-mono text-foreground font-bold">
+                    {activeAgent}
+                  </span>
+                  {agents.find((a) => a.name === activeAgent)?.currentTask && (
+                    <span className="text-[9px] text-muted-foreground truncate">
+                      {agents.find((a) => a.name === activeAgent)?.currentTask}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Agents */}
         <div className="p-3">
           <div className="flex items-center gap-1.5 mb-3">
@@ -211,29 +291,44 @@ const SystemPanel = () => {
             <span className="text-[10px] uppercase tracking-widest text-terminal-amber">
               {mode === "cloud" ? "Cloud Model" : "Agents"}
             </span>
+            <span className="text-[8px] font-mono text-muted-foreground ml-auto">
+              {agents.filter((a) => a.status === "active" || a.status === "processing").length} active
+            </span>
           </div>
-          <div className="space-y-2">
-            {agents.map((agent) => (
-              <div
-                key={agent.name}
-                className="flex items-center gap-2 p-2 rounded border border-border bg-muted/30 hover:bg-muted/50 transition-colors group"
-              >
-                <agent.icon className={`w-3.5 h-3.5 ${agent.color}`} />
-                <div className="flex-1 min-w-0">
-                  <div className="text-xs font-mono text-foreground">
-                    {agent.name}
-                  </div>
-                  <div className="text-[10px] text-muted-foreground truncate">
-                    {agent.model}
-                  </div>
-                </div>
-                <div
-                  className={`w-1.5 h-1.5 rounded-full ${
-                    isOnline ? "bg-primary pulse-glow" : "bg-muted-foreground/30"
+          <div className="space-y-1.5">
+            {agents.map((agent) => {
+              const Icon = agentIcons[agent.name] || Brain;
+              const color = agentColorMap[agent.name] || "text-primary";
+              const isActive = agent.status === "active" || agent.status === "processing";
+
+              return (
+                <motion.div
+                  key={agent.name}
+                  layout
+                  className={`flex items-center gap-2 p-2 rounded border transition-all ${
+                    isActive
+                      ? "border-primary/40 bg-primary/5"
+                      : "border-border bg-muted/30 hover:bg-muted/50"
                   }`}
-                />
-              </div>
-            ))}
+                >
+                  <Icon className={`w-3.5 h-3.5 flex-shrink-0 ${color}`} />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-mono text-foreground flex items-center gap-1.5">
+                      {agent.name}
+                      {isActive && agent.currentTask && (
+                        <span className="text-[8px] text-muted-foreground truncate">
+                          — {agent.currentTask}
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[10px] text-muted-foreground truncate">
+                      {agent.model}
+                    </div>
+                  </div>
+                  {statusIndicator(agent.status)}
+                </motion.div>
+              );
+            })}
           </div>
         </div>
       </div>

@@ -18,6 +18,7 @@ import { estimateTokens, formatTokenCount } from "@/lib/tokens";
 import { saveBranch, getParentBranch } from "@/lib/branches";
 import { getConversationSystemPrompt, setConversationSystemPrompt } from "@/lib/conversationSystemPrompts";
 import { buildSkillsPrompt } from "@/lib/agentSkills";
+import { setAgentActive, setAgentComplete, resetAllAgents } from "@/lib/agentStatus";
 
 const WELCOME_MSG: ChatMessageType = {
   id: "welcome",
@@ -266,6 +267,7 @@ const ChatView = () => {
     setMessages([...allBefore.filter(m => m.id !== "system-prompt"), assistantMsg]);
     setIsStreaming(true);
     setStreamStartTime(Date.now());
+    setAgentActive(assistantMsg.agent || "ECHO Cloud", content.slice(0, 60));
 
     let convId = activeConversationId;
     if (!convId) {
@@ -328,6 +330,7 @@ const ChatView = () => {
       );
     } finally {
       setIsStreaming(false);
+      setAgentComplete(assistantMsg.agent || "ECHO Cloud");
     }
   };
 
