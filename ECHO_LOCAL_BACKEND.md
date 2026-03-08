@@ -15,8 +15,8 @@
 │                     │   POST /api/chat (SSE)        │                      │
 │  localStorage:      │   GET  /api/health            │   ┌────────────────┐ │
 │  echo_backend_mode  │   GET  /api/system            │   │  Ollama API    │ │
-│  = "local"          │   POST /api/semantic-search   │   │  localhost:11434│ │
-│                     │                               │   └────────────────┘ │
+│  = "local"          │   GET  /api/agents            │   │  localhost:11434│ │
+│                     │   POST /api/semantic-search   │   └────────────────┘ │
 └─────────────────────┘                               └──────────────────────┘
 ```
 
