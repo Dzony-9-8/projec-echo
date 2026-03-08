@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { X, Thermometer, Hash, FileText, Brain } from "lucide-react";
+import { X, Thermometer, Hash, FileText, Brain, Palette, Type, Scan } from "lucide-react";
 import {
   getChatSettings,
   saveChatSettings,
