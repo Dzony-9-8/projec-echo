@@ -184,7 +184,8 @@ const parseSSEStream = async (
 const sendCloudMessage = async (
   messages: ChatMessage[],
   depth: number,
-  onChunk?: (text: string) => void
+  onChunk?: (text: string) => void,
+  model?: string
 ): Promise<string> => {
   const response = await fetch(CLOUD_CHAT_URL, {
     method: "POST",
@@ -195,6 +196,7 @@ const sendCloudMessage = async (
     body: JSON.stringify({
       messages: messages.map((m) => ({ role: m.role, content: m.content })),
       depth,
+      model,
     }),
   });
 
