@@ -18,6 +18,7 @@ const ChatInput = ({ onSend, disabled }: Props) => {
   const [input, setInput] = useState("");
   const [files, setFiles] = useState<FileAttachment[]>([]);
   const [isDragging, setIsDragging] = useState(false);
+  const [depth, setDepth] = useState(1);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dropZoneRef = useRef<HTMLDivElement>(null);
