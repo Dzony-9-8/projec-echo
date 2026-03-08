@@ -10,7 +10,7 @@ import {
 } from "@/lib/files";
 
 interface Props {
-  onSend: (message: string, files?: FileAttachment[]) => void;
+  onSend: (message: string, files?: FileAttachment[], depth?: number) => void;
   disabled?: boolean;
 }
 
