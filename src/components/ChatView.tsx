@@ -308,6 +308,7 @@ const ChatView = () => {
       const totalMsgTokens = estimateTokens(userMsg.content) + estimateTokens(finalContent);
       const latency = Date.now() - assistantMsg.timestamp.getTime();
       logUsage(assistantMsg.model || "unknown", totalMsgTokens, latency, convId || undefined);
+      setAgentComplete(assistantMsg.agent || "ECHO Cloud", totalMsgTokens);
     } catch (err: any) {
       const errMsg = err?.message || "Connection failed";
 
@@ -328,9 +329,9 @@ const ChatView = () => {
             : m
         )
       );
+      setAgentComplete(assistantMsg.agent || "ECHO Cloud", 0);
     } finally {
       setIsStreaming(false);
-      setAgentComplete(assistantMsg.agent || "ECHO Cloud");
     }
   };
 
