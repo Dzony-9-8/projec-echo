@@ -40,13 +40,20 @@ const ChatView = () => {
     (m) => !m.agent || m.agent === "System" || activeAgents.has(m.agent)
   );
 
-  const handleSend = async (content: string) => {
+  const handleSend = async (content: string, attachments?: FileAttachment[]) => {
+    const filesMeta = attachments?.map((f) => ({
+      name: f.name,
+      type: f.type,
+      preview: f.preview,
+    }));
+
     const userMsg: ChatMessageType = {
       id: crypto.randomUUID(),
       role: "user",
-      content,
+      content: content || (attachments ? `[Attached ${attachments.length} file(s)]` : ""),
       timestamp: new Date(),
       status: "complete",
+      files: filesMeta,
     };
 
     const assistantMsg: ChatMessageType = {
