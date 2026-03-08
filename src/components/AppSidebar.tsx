@@ -32,6 +32,7 @@ const navItems: { id: ViewType; icon: typeof MessageSquare; label: string; color
   { id: "analytics", icon: BarChart3, label: "Analytics", color: "text-primary" },
   { id: "prompts", icon: BookOpen, label: "Prompts", color: "text-terminal-magenta" },
   { id: "rag", icon: FileText, label: "RAG", color: "text-terminal-cyan" },
+  { id: "skills", icon: Zap, label: "Skills", color: "text-terminal-amber" },
 ];
 
 const AppSidebar = ({ activeView, onViewChange }: Props) => {
