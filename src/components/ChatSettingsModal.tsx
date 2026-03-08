@@ -15,8 +15,27 @@ interface Props {
   onChange?: (settings: ChatSettings) => void;
 }
 
+const ACCENT_COLORS = [
+  { label: "Green", hsl: "142 70% 45%" },
+  { label: "Cyan", hsl: "185 60% 50%" },
+  { label: "Amber", hsl: "45 90% 50%" },
+  { label: "Violet", hsl: "280 60% 55%" },
+  { label: "Rose", hsl: "350 70% 55%" },
+  { label: "Blue", hsl: "210 70% 55%" },
+];
+
+const FONT_SIZES = [
+  { label: "XS", value: "12px" },
+  { label: "SM", value: "13px" },
+  { label: "MD", value: "14px" },
+  { label: "LG", value: "16px" },
+];
+
 const ChatSettingsModal = ({ open, onClose, onChange }: Props) => {
   const [settings, setSettings] = useState<ChatSettings>(getChatSettings);
+  const [accentColor, setAccentColor] = useState(() => localStorage.getItem("echo_accent") || "142 70% 45%");
+  const [fontSize, setFontSize] = useState(() => localStorage.getItem("echo_fontsize") || "14px");
+  const [scanlines, setScanlines] = useState(() => localStorage.getItem("echo_scanlines") !== "false");
 
   useEffect(() => {
     if (open) setSettings(getChatSettings());
@@ -27,6 +46,25 @@ const ChatSettingsModal = ({ open, onClose, onChange }: Props) => {
     setSettings(next);
     saveChatSettings(next);
     onChange?.(next);
+  };
+
+  const applyAccent = (hsl: string) => {
+    setAccentColor(hsl);
+    localStorage.setItem("echo_accent", hsl);
+    document.documentElement.style.setProperty("--primary", hsl);
+  };
+
+  const applyFontSize = (size: string) => {
+    setFontSize(size);
+    localStorage.setItem("echo_fontsize", size);
+    document.documentElement.style.setProperty("--chat-font-size", size);
+  };
+
+  const toggleScanlines = () => {
+    const next = !scanlines;
+    setScanlines(next);
+    localStorage.setItem("echo_scanlines", String(next));
+    document.documentElement.classList.toggle("no-scanlines", !next);
   };
 
   if (!open) return null;
