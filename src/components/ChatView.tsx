@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import ChatMessage from "@/components/ChatMessage";
 import ChatInput from "@/components/ChatInput";
 import SystemPanel from "@/components/SystemPanel";
-import { type ChatMessage as ChatMessageType, sendMessage } from "@/lib/api";
+import { type ChatMessage as ChatMessageType, sendMessage, getBackendMode } from "@/lib/api";
 import { type FileAttachment } from "@/lib/files";
 
 const ChatView = () => {
@@ -56,14 +56,15 @@ const ChatView = () => {
       files: filesMeta,
     };
 
+    const mode = getBackendMode();
     const assistantMsg: ChatMessageType = {
       id: crypto.randomUUID(),
       role: "assistant",
       content: "",
       timestamp: new Date(),
       status: "streaming",
-      agent: "Supervisor",
-      model: "LLaMA 3.1",
+      agent: mode === "cloud" ? "ECHO Cloud" : "Supervisor",
+      model: mode === "cloud" ? "Gemini 3 Flash" : "LLaMA 3.1",
     };
 
     setMessages((prev) => [...prev, userMsg, assistantMsg]);
@@ -71,13 +72,17 @@ const ChatView = () => {
 
     try {
       const allMessages = [...messages, userMsg];
-      const response = await sendMessage(allMessages, (chunk) => {
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === assistantMsg.id ? { ...m, content: chunk } : m
-          )
-        );
-      });
+      const response = await sendMessage(
+        allMessages,
+        (chunk) => {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantMsg.id ? { ...m, content: chunk } : m
+            )
+          );
+        },
+        depth ?? 1
+      );
 
       setMessages((prev) =>
         prev.map((m) =>

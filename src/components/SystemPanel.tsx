@@ -14,11 +14,21 @@ import {
   PenTool,
   Shield,
   ChevronRight,
+  Cloud,
+  Server,
 } from "lucide-react";
-import { getBackendUrl, setBackendUrl, checkHealth, type SystemStatus } from "@/lib/api";
+import {
+  getBackendUrl,
+  setBackendUrl,
+  getBackendMode,
+  setBackendMode,
+  checkHealth,
+  type SystemStatus,
+  type BackendMode,
+} from "@/lib/api";
 
-const agents = [
-  { name: "Planner", icon: Brain, model: "LLaMA 3.1", color: "text-primary" },
+const localAgents = [
+  { name: "Supervisor", icon: Brain, model: "LLaMA 3.1", color: "text-primary" },
   { name: "Research", icon: Search, model: "DeepSeek R1", color: "text-terminal-cyan" },
   { name: "Coding", icon: Code2, model: "DeepSeek Coder", color: "text-terminal-amber" },
   { name: "Writing", icon: PenTool, model: "LLaMA 3.1", color: "text-primary" },
@@ -27,9 +37,14 @@ const agents = [
   { name: "Critic", icon: Shield, model: "DeepSeek R1", color: "text-terminal-red" },
 ];
 
+const cloudAgents = [
+  { name: "ECHO Cloud", icon: Cloud, model: "Gemini 3 Flash", color: "text-terminal-cyan" },
+];
+
 const SystemPanel = () => {
   const [status, setStatus] = useState<SystemStatus | null>(null);
   const [backendUrl, setUrl] = useState(getBackendUrl());
+  const [mode, setMode] = useState<BackendMode>(getBackendMode());
   const [showSettings, setShowSettings] = useState(false);
 
   useEffect(() => {
@@ -37,9 +52,16 @@ const SystemPanel = () => {
     check();
     const interval = setInterval(check, 10000);
     return () => clearInterval(interval);
-  }, []);
+  }, [mode]);
+
+  const handleModeChange = (newMode: BackendMode) => {
+    setMode(newMode);
+    setBackendMode(newMode);
+    checkHealth().then(setStatus);
+  };
 
   const isOnline = status?.backend === "online";
+  const agents = mode === "cloud" ? cloudAgents : localAgents;
 
   return (
     <div className="w-72 border-l border-border bg-sidebar flex flex-col h-full overflow-hidden">
@@ -59,8 +81,39 @@ const SystemPanel = () => {
         </button>
       </div>
 
-      {/* Settings panel */}
-      {showSettings && (
+      {/* Mode toggle */}
+      <div className="p-3 border-b border-border">
+        <label className="text-[9px] uppercase tracking-widest text-muted-foreground block mb-2">
+          Backend Mode
+        </label>
+        <div className="flex gap-1">
+          <button
+            onClick={() => handleModeChange("cloud")}
+            className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded text-[10px] font-mono border transition-all ${
+              mode === "cloud"
+                ? "border-terminal-cyan text-terminal-cyan bg-terminal-cyan/10"
+                : "border-border text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Cloud className="w-3 h-3" />
+            Cloud
+          </button>
+          <button
+            onClick={() => handleModeChange("local")}
+            className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded text-[10px] font-mono border transition-all ${
+              mode === "local"
+                ? "border-terminal-amber text-terminal-amber bg-terminal-amber/10"
+                : "border-border text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Server className="w-3 h-3" />
+            Local
+          </button>
+        </div>
+      </div>
+
+      {/* Settings panel (local mode only) */}
+      {showSettings && mode === "local" && (
         <div className="p-3 border-b border-border bg-muted/50">
           <label className="text-[10px] uppercase tracking-widest text-muted-foreground block mb-1">
             Backend URL
@@ -92,7 +145,16 @@ const SystemPanel = () => {
             >
               {isOnline ? "CONNECTED" : "OFFLINE"}
             </span>
+            <span className="text-[9px] text-muted-foreground ml-auto uppercase">
+              {mode}
+            </span>
           </div>
+
+          {mode === "cloud" && isOnline && (
+            <p className="text-[10px] text-muted-foreground">
+              Powered by Lovable AI · Gemini 3 Flash
+            </p>
+          )}
 
           {status?.gpu && (
             <div className="space-y-1.5">
@@ -114,7 +176,7 @@ const SystemPanel = () => {
             </div>
           )}
 
-          {!isOnline && (
+          {!isOnline && mode === "local" && (
             <p className="text-[10px] text-muted-foreground mt-1">
               Start your FastAPI backend at {backendUrl}
             </p>
@@ -127,7 +189,7 @@ const SystemPanel = () => {
             <div className="flex items-center gap-1.5 mb-2">
               <HardDrive className="w-3 h-3 text-terminal-cyan" />
               <span className="text-[10px] uppercase tracking-widest text-terminal-cyan">
-                Models Loaded
+                Models Active
               </span>
             </div>
             {status.models_loaded.map((model) => (
@@ -147,7 +209,7 @@ const SystemPanel = () => {
           <div className="flex items-center gap-1.5 mb-3">
             <Brain className="w-3 h-3 text-terminal-amber" />
             <span className="text-[10px] uppercase tracking-widest text-terminal-amber">
-              Agents
+              {mode === "cloud" ? "Cloud Model" : "Agents"}
             </span>
           </div>
           <div className="space-y-2">
@@ -165,7 +227,11 @@ const SystemPanel = () => {
                     {agent.model}
                   </div>
                 </div>
-                <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground/30 group-hover:bg-primary/50" />
+                <div
+                  className={`w-1.5 h-1.5 rounded-full ${
+                    isOnline ? "bg-primary pulse-glow" : "bg-muted-foreground/30"
+                  }`}
+                />
               </div>
             ))}
           </div>
@@ -175,7 +241,7 @@ const SystemPanel = () => {
       {/* Footer */}
       <div className="p-2 border-t border-border">
         <div className="text-[9px] text-muted-foreground text-center font-mono uppercase tracking-wider">
-          ECHO AI System v0.1
+          ECHO AI System v2.0 · {mode === "cloud" ? "☁ Cloud" : "⚡ Local"}
         </div>
       </div>
     </div>
