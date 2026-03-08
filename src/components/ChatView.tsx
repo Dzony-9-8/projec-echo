@@ -331,6 +331,7 @@ const ChatView = () => {
             onTogglePin={togglePin}
             systemPrompt={systemPrompt}
             onSystemPromptChange={setSystemPrompt}
+            onSearchMessages={searchMessages}
           />
         </div>
       )}
