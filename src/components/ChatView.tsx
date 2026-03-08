@@ -23,6 +23,7 @@ const ChatView = () => {
   const [isStreaming, setIsStreaming] = useState(false);
   const [showPanel, setShowPanel] = useState(true);
   const [showHistory, setShowHistory] = useState(true);
+  const [showExport, setShowExport] = useState(false);
   const [activeAgents, setActiveAgents] = useState<Set<string>>(
     new Set(["Supervisor", "Developer", "Researcher", "Critic"])
   );
