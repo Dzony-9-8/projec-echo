@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Send, Mic, Paperclip, X, Image, FileText } from "lucide-react";
+import { Send, Mic, Paperclip, X, Image, FileText, Layers } from "lucide-react";
 import {
   type FileAttachment,
   getFileType,
@@ -10,7 +10,7 @@ import {
 } from "@/lib/files";
 
 interface Props {
-  onSend: (message: string, files?: FileAttachment[]) => void;
+  onSend: (message: string, files?: FileAttachment[], depth?: number) => void;
   disabled?: boolean;
 }
 
@@ -18,6 +18,7 @@ const ChatInput = ({ onSend, disabled }: Props) => {
   const [input, setInput] = useState("");
   const [files, setFiles] = useState<FileAttachment[]>([]);
   const [isDragging, setIsDragging] = useState(false);
+  const [depth, setDepth] = useState(1);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dropZoneRef = useRef<HTMLDivElement>(null);
@@ -54,7 +55,7 @@ const ChatInput = ({ onSend, disabled }: Props) => {
 
   const handleSubmit = () => {
     if ((!input.trim() && files.length === 0) || disabled) return;
-    onSend(input.trim(), files.length > 0 ? files : undefined);
+    onSend(input.trim(), files.length > 0 ? files : undefined, depth);
     setInput("");
     setFiles([]);
   };
@@ -227,6 +228,22 @@ const ChatInput = ({ onSend, disabled }: Props) => {
             className="w-full bg-input border border-border rounded px-3 py-2.5 pl-10 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:glow-border resize-none font-mono disabled:opacity-50"
           />
         </div>
+        {/* Depth slider */}
+        <div className="flex items-center gap-1.5 px-2 py-1.5 rounded border border-border bg-muted/50" title="Critic iteration depth">
+          <Layers className="w-3.5 h-3.5 text-terminal-red flex-shrink-0" />
+          <input
+            type="range"
+            min={0}
+            max={5}
+            value={depth}
+            onChange={(e) => setDepth(Number(e.target.value))}
+            className="w-16 h-1 accent-terminal-red cursor-pointer"
+          />
+          <span className="text-[10px] font-mono text-terminal-red min-w-[14px] text-center">
+            {depth}
+          </span>
+        </div>
+
         <button
           onClick={handleSubmit}
           disabled={(!input.trim() && files.length === 0) || disabled}
