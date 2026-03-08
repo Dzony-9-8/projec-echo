@@ -35,9 +35,13 @@ const ConversationList = ({
   onTogglePin,
   systemPrompt = "",
   onSystemPromptChange,
+  onSearchMessages,
 }: Props) => {
   const [search, setSearch] = useState("");
   const [useRegex, setUseRegex] = useState(false);
+  const [deepSearch, setDeepSearch] = useState(false);
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [searching, setSearching] = useState(false);
   const [showSystemPrompt, setShowSystemPrompt] = useState(false);
   const [showDateFilter, setShowDateFilter] = useState(false);
   const [dateFrom, setDateFrom] = useState("");

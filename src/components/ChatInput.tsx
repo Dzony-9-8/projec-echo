@@ -128,6 +128,7 @@ const ChatInput = ({ onSend, disabled }: Props) => {
     onSend(input.trim(), files.length > 0 ? files : undefined, depth, model);
     setInput("");
     setFiles([]);
+    localStorage.removeItem("echo_draft");
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
