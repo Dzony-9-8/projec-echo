@@ -72,13 +72,17 @@ const ChatView = () => {
 
     try {
       const allMessages = [...messages, userMsg];
-      const response = await sendMessage(allMessages, (chunk) => {
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === assistantMsg.id ? { ...m, content: chunk } : m
-          )
-        );
-      });
+      const response = await sendMessage(
+        allMessages,
+        (chunk) => {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantMsg.id ? { ...m, content: chunk } : m
+            )
+          );
+        },
+        depth ?? 1
+      );
 
       setMessages((prev) =>
         prev.map((m) =>
