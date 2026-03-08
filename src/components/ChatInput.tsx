@@ -55,7 +55,7 @@ const ChatInput = ({ onSend, disabled }: Props) => {
 
   const handleSubmit = () => {
     if ((!input.trim() && files.length === 0) || disabled) return;
-    onSend(input.trim(), files.length > 0 ? files : undefined);
+    onSend(input.trim(), files.length > 0 ? files : undefined, depth);
     setInput("");
     setFiles([]);
   };
