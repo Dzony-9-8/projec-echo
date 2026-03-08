@@ -203,6 +203,74 @@ const ChatSettingsModal = ({ open, onClose, onChange }: Props) => {
                 ))}
               </div>
             </div>
+
+            {/* Appearance */}
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Palette className="w-3.5 h-3.5 text-terminal-magenta" />
+                <label className="text-[11px] font-mono text-foreground uppercase tracking-wider">
+                  Accent Color
+                </label>
+              </div>
+              <div className="flex gap-1.5 flex-wrap">
+                {ACCENT_COLORS.map((c) => (
+                  <button
+                    key={c.hsl}
+                    onClick={() => applyAccent(c.hsl)}
+                    className={`w-7 h-7 rounded-full border-2 transition-all ${
+                      accentColor === c.hsl ? "border-foreground scale-110" : "border-transparent"
+                    }`}
+                    style={{ backgroundColor: `hsl(${c.hsl})` }}
+                    title={c.label}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* Font Size */}
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Type className="w-3.5 h-3.5 text-terminal-cyan" />
+                <label className="text-[11px] font-mono text-foreground uppercase tracking-wider">
+                  Font Size
+                </label>
+              </div>
+              <div className="flex gap-1.5">
+                {FONT_SIZES.map((f) => (
+                  <button
+                    key={f.value}
+                    onClick={() => applyFontSize(f.value)}
+                    className={`px-3 py-1.5 rounded text-[10px] font-mono border transition-colors ${
+                      fontSize === f.value
+                        ? "border-terminal-cyan text-terminal-cyan bg-terminal-cyan/10"
+                        : "border-border text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Scanlines toggle */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Scan className="w-3.5 h-3.5 text-primary" />
+                <label className="text-[11px] font-mono text-foreground uppercase tracking-wider">
+                  Scanlines Effect
+                </label>
+              </div>
+              <button
+                onClick={toggleScanlines}
+                className={`px-3 py-1 rounded text-[10px] font-mono border transition-colors ${
+                  scanlines
+                    ? "border-primary text-primary bg-primary/10"
+                    : "border-border text-muted-foreground"
+                }`}
+              >
+                {scanlines ? "ON" : "OFF"}
+              </button>
+            </div>
           </div>
 
           {/* Footer */}
