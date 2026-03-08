@@ -254,7 +254,8 @@ const sendLocalMessage = async (
 export const sendMessage = async (
   messages: ChatMessage[],
   onChunk?: (text: string) => void,
-  depth: number = 1
+  depth: number = 1,
+  model?: string
 ): Promise<string> => {
   const mode = getBackendMode();
 
@@ -262,7 +263,7 @@ export const sendMessage = async (
     return sendLocalMessage(messages, onChunk);
   }
 
-  return sendCloudMessage(messages, depth, onChunk);
+  return sendCloudMessage(messages, depth, onChunk, model);
 };
 
 // Check backend health

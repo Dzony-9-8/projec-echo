@@ -5,7 +5,8 @@
 @tailwind utilities;
 
 @layer base {
-  :root {
+  :root,
+  .dark {
     --background: 220 20% 4%;
     --foreground: 142 70% 80%;
 
@@ -51,6 +52,51 @@
     --sidebar-border: 142 40% 18%;
     --sidebar-ring: 142 70% 45%;
   }
+
+  .light {
+    --background: 60 10% 96%;
+    --foreground: 220 20% 12%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 220 20% 12%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 20% 12%;
+
+    --primary: 142 60% 35%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 185 50% 35%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 220 10% 92%;
+    --muted-foreground: 220 10% 45%;
+
+    --accent: 280 50% 50%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 65% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 10% 82%;
+    --input: 220 10% 94%;
+    --ring: 142 60% 35%;
+
+    --terminal-glow: 142 60% 35%;
+    --terminal-cyan: 185 50% 40%;
+    --terminal-amber: 38 80% 45%;
+    --terminal-magenta: 280 50% 50%;
+    --terminal-red: 0 65% 50%;
+
+    --sidebar-background: 220 10% 97%;
+    --sidebar-foreground: 220 20% 12%;
+    --sidebar-primary: 142 60% 35%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 10% 92%;
+    --sidebar-accent-foreground: 220 20% 12%;
+    --sidebar-border: 220 10% 82%;
+    --sidebar-ring: 142 60% 35%;
+  }
 }
 
 @layer base {
@@ -90,22 +136,39 @@
   }
 }
 
+/* Light mode: reduce glow effects */
+.light .glow-green {
+  text-shadow: none;
+}
+
+.light .glow-cyan {
+  text-shadow: none;
+}
+
+.light .glow-border {
+  box-shadow: 0 0 4px hsl(142 60% 35% / 0.1);
+}
+
+.light .scanline {
+  background: none;
+}
+
 /* Scrollbar */
 ::-webkit-scrollbar {
   width: 4px;
 }
 
 ::-webkit-scrollbar-track {
-  background: hsl(220 20% 4%);
+  background: hsl(var(--background));
 }
 
 ::-webkit-scrollbar-thumb {
-  background: hsl(142 40% 18%);
+  background: hsl(var(--border));
   border-radius: 2px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: hsl(142 70% 45%);
+  background: hsl(var(--primary));
 }
 
 /* Cursor blink */
@@ -130,4 +193,39 @@
 @keyframes typing {
   from { width: 0; }
   to { width: 100%; }
+}
+
+/* Syntax highlighting for code blocks */
+.prose pre {
+  position: relative;
+  overflow-x: auto;
+}
+
+.prose pre code {
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.prose code:not(pre code) {
+  padding: 0.15em 0.4em;
+  border-radius: 3px;
+  font-size: 0.9em;
+}
+
+.prose table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.prose th,
+.prose td {
+  padding: 0.4em 0.8em;
+  border: 1px solid hsl(var(--border));
+  text-align: left;
+  font-size: 12px;
+}
+
+.prose th {
+  background: hsl(var(--muted));
+  font-weight: 600;
 }
