@@ -104,7 +104,7 @@ const SharedView = () => {
           <p className="text-center text-sm font-mono text-muted-foreground py-8">No messages in this conversation</p>
         ) : (
           messages.map((msg) => (
-            <ChatMessage key={msg.id} message={msg} />
+            <ChatMessageComponent key={msg.id} message={msg} />
           ))
         )}
       </div>
