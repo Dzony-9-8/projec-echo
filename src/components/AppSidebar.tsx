@@ -12,6 +12,7 @@ import {
   BarChart3,
   BookOpen,
   FileText,
+  Zap,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/hooks/useAuth";
