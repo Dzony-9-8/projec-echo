@@ -3,6 +3,15 @@ import { MessageSquare, Plus, Trash2, Search, Pin, PinOff, Settings2, Calendar, 
 import type { Conversation } from "@/hooks/useConversations";
 import { getParentBranch, getBranchesForConversation } from "@/lib/branches";
 
+interface SearchResult {
+  conversationId: string;
+  conversationTitle: string;
+  messageContent: string;
+  messageRole: string;
+  messageAgent?: string;
+  createdAt: string;
+}
+
 interface Props {
   conversations: Conversation[];
   activeId: string | null;
@@ -13,6 +22,7 @@ interface Props {
   onTogglePin?: (id: string) => void;
   systemPrompt?: string;
   onSystemPromptChange?: (prompt: string) => void;
+  onSearchMessages?: (query: string) => Promise<SearchResult[]>;
 }
 
 const ConversationList = ({
