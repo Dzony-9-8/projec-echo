@@ -48,6 +48,47 @@ export interface SystemStatus {
   mode: BackendMode;
 }
 
+// Real-time system metrics from local backend
+export interface RealSystemMetrics {
+  cpu: {
+    name: string;
+    cores: number;
+    threads: number;
+    usage_percent: number;
+  };
+  ram: {
+    total_gb: number;
+    used_gb: number;
+    usage_percent: number;
+  };
+  gpu: {
+    name: string;
+    vram_total_mb: number;
+    vram_used_mb: number;
+    gpu_usage_percent: number;
+    temperature_c: number | null;
+  } | null;
+  platform: string;
+  hostname: string;
+}
+
+// Fetch real system metrics from local backend
+export const fetchSystemMetrics = async (): Promise<RealSystemMetrics | null> => {
+  const mode = getBackendMode();
+  if (mode !== "local") return null;
+
+  const url = getBackendUrl();
+  try {
+    const response = await fetch(`${url}/api/system`, {
+      signal: AbortSignal.timeout(3000),
+    });
+    if (!response.ok) return null;
+    return await response.json();
+  } catch {
+    return null;
+  }
+};
+
 // Parse SSE stream token-by-token
 const parseSSEStream = async (
   response: Response,

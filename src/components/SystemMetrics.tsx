@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback } from "react";
-import { Cpu, HardDrive, Activity, MonitorSpeaker, MemoryStick } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Cpu, HardDrive, Activity, MonitorSpeaker, MemoryStick, Settings, Save, RotateCcw } from "lucide-react";
+import { fetchSystemMetrics, getBackendMode, type RealSystemMetrics } from "@/lib/api";
 
-interface SystemInfo {
+/* ─── Types ─── */
+interface BrowserInfo {
   cpuCores: number;
-  ramTotalGB: number | null;
   deviceMemoryGB: number | null;
   gpu: string | null;
   gpuVendor: string | null;
@@ -12,29 +13,31 @@ interface SystemInfo {
   browser: string;
 }
 
+interface ManualOverrides {
+  cpuName?: string;
+  ramTotalGB?: number;
+  gpuName?: string;
+  vramMB?: number;
+}
+
+type MetricSource = "local" | "override" | "browser";
+
+/* ─── Browser detection (fallback) ─── */
 const detectGPU = () => {
   let gpu: string | null = null;
   let gpuVendor: string | null = null;
   let vramMB: number | null = null;
-
   try {
     const canvas = document.createElement("canvas");
-    const gl = (canvas.getContext("webgl2") || canvas.getContext("webgl") || canvas.getContext("experimental-webgl")) as WebGLRenderingContext | null;
+    const gl = (canvas.getContext("webgl2") || canvas.getContext("webgl")) as WebGLRenderingContext | null;
     if (gl) {
       const ext = gl.getExtension("WEBGL_debug_renderer_info");
       if (ext) {
         gpu = gl.getParameter(ext.UNMASKED_RENDERER_WEBGL);
         gpuVendor = gl.getParameter(ext.UNMASKED_VENDOR_WEBGL);
       }
-
-      // Estimate VRAM from max texture size & renderer string
-      const maxTextureSize = gl.getParameter(gl.MAX_TEXTURE_SIZE);
-      const maxRenderbufferSize = gl.getParameter(gl.MAX_RENDERBUFFER_SIZE);
-
-      // Try to estimate VRAM from known GPU names
       if (gpu) {
         const gpuLower = gpu.toLowerCase();
-        // Known VRAM mappings for common GPUs
         const vramMap: Record<string, number> = {
           "rtx 4090": 24576, "rtx 4080": 16384, "rtx 4070 ti": 12288, "rtx 4070": 12288, "rtx 4060 ti": 8192, "rtx 4060": 8192,
           "rtx 3090": 24576, "rtx 3080 ti": 12288, "rtx 3080": 10240, "rtx 3070 ti": 8192, "rtx 3070": 8192, "rtx 3060 ti": 8192, "rtx 3060": 12288,
@@ -42,115 +45,108 @@ const detectGPU = () => {
           "gtx 1080 ti": 11264, "gtx 1080": 8192, "gtx 1070 ti": 8192, "gtx 1070": 8192, "gtx 1060": 6144, "gtx 1050 ti": 4096, "gtx 1050": 2048,
           "gtx 1660 ti": 6144, "gtx 1660": 6144, "gtx 1650": 4096,
           "rx 7900 xtx": 24576, "rx 7900 xt": 20480, "rx 7800 xt": 16384, "rx 7700 xt": 12288, "rx 7600": 8192,
-          "rx 6900 xt": 16384, "rx 6800 xt": 16384, "rx 6800": 16384, "rx 6700 xt": 12288, "rx 6600 xt": 8192,
-          "apple m1": 8192, "apple m1 pro": 16384, "apple m1 max": 32768, "apple m1 ultra": 65536,
-          "apple m2": 8192, "apple m2 pro": 16384, "apple m2 max": 38912, "apple m2 ultra": 77824,
-          "apple m3": 8192, "apple m3 pro": 18432, "apple m3 max": 40960,
-          "apple m4": 16384, "apple m4 pro": 24576, "apple m4 max": 49152,
+          "rx 6900 xt": 16384, "rx 6800 xt": 16384, "rx 6700 xt": 12288, "rx 6600 xt": 8192,
+          "apple m1": 8192, "apple m1 pro": 16384, "apple m1 max": 32768, "apple m2": 8192, "apple m2 pro": 16384, "apple m2 max": 38912,
+          "apple m3": 8192, "apple m3 pro": 18432, "apple m3 max": 40960, "apple m4": 16384, "apple m4 pro": 24576, "apple m4 max": 49152,
           "intel iris xe": 4096, "intel uhd": 2048, "intel hd": 1024,
         };
-
         for (const [key, vram] of Object.entries(vramMap)) {
-          if (gpuLower.includes(key)) {
-            vramMB = vram;
-            break;
-          }
-        }
-
-        // Fallback: estimate from max texture size
-        if (!vramMB && maxTextureSize >= 16384) {
-          vramMB = maxTextureSize >= 32768 ? 8192 : 4096;
+          if (gpuLower.includes(key)) { vramMB = vram; break; }
         }
       }
     }
-  } catch {
-    /* WebGL not available */
-  }
-
+  } catch { /* ignore */ }
   return { gpu, gpuVendor, vramMB };
 };
 
-const detectBrowser = (): string => {
-  const ua = navigator.userAgent;
-  if (ua.includes("Firefox")) return "Firefox";
-  if (ua.includes("Edg/")) return "Edge";
-  if (ua.includes("OPR/") || ua.includes("Opera")) return "Opera";
-  if (ua.includes("Chrome")) return "Chrome";
-  if (ua.includes("Safari")) return "Safari";
-  return "Unknown";
-};
-
-const getSystemInfo = (): SystemInfo => {
+const getBrowserInfo = (): BrowserInfo => {
   const nav = navigator as any;
-  const cpuCores = nav.hardwareConcurrency || 0;
-  const deviceMemoryGB = nav.deviceMemory || null;
-  const platform = nav.platform || "Unknown";
-
-  // Use performance.memory if available (Chrome only)
-  let ramTotalGB: number | null = null;
-  const perf = performance as any;
-  if (perf.memory?.jsHeapSizeLimit) {
-    // jsHeapSizeLimit is capped but gives a floor estimate
-    // Combine with deviceMemory for best guess
-    ramTotalGB = deviceMemoryGB || Math.round(perf.memory.jsHeapSizeLimit / (1024 * 1024 * 1024) * 2);
-  } else {
-    ramTotalGB = deviceMemoryGB;
-  }
-
   const { gpu, gpuVendor, vramMB } = detectGPU();
-
+  const ua = navigator.userAgent;
+  const browser = ua.includes("Firefox") ? "Firefox" : ua.includes("Edg/") ? "Edge" : ua.includes("Chrome") ? "Chrome" : ua.includes("Safari") ? "Safari" : "Unknown";
   return {
-    cpuCores,
-    ramTotalGB,
-    deviceMemoryGB,
-    gpu,
-    gpuVendor,
-    vramMB,
-    platform,
-    browser: detectBrowser(),
+    cpuCores: nav.hardwareConcurrency || 0,
+    deviceMemoryGB: nav.deviceMemory || null,
+    gpu, gpuVendor, vramMB,
+    platform: nav.platform || "Unknown",
+    browser,
   };
 };
 
 const getJSHeapUsage = (): { usedMB: number; totalMB: number } | null => {
   const perf = performance as any;
-  if (perf.memory) {
-    return {
-      usedMB: Math.round(perf.memory.usedJSHeapSize / (1024 * 1024)),
-      totalMB: Math.round(perf.memory.totalJSHeapSize / (1024 * 1024)),
-    };
-  }
-  return null;
+  return perf.memory ? { usedMB: Math.round(perf.memory.usedJSHeapSize / (1024 * 1024)), totalMB: Math.round(perf.memory.totalJSHeapSize / (1024 * 1024)) } : null;
 };
 
+const OVERRIDES_KEY = "echo_system_overrides";
+const loadOverrides = (): ManualOverrides => {
+  try { return JSON.parse(localStorage.getItem(OVERRIDES_KEY) || "{}"); } catch { return {}; }
+};
+const saveOverrides = (o: ManualOverrides) => localStorage.setItem(OVERRIDES_KEY, JSON.stringify(o));
+
+/* ─── Component ─── */
 const SystemMetrics = () => {
-  const [info, setInfo] = useState<SystemInfo | null>(null);
-  const [cpuSim, setCpuSim] = useState(12);
-  const [heapUsage, setHeapUsage] = useState<{ usedMB: number; totalMB: number } | null>(null);
-  const [gpuUsageSim, setGpuUsageSim] = useState(8);
+  const [browserInfo] = useState<BrowserInfo>(getBrowserInfo);
+  const [realMetrics, setRealMetrics] = useState<RealSystemMetrics | null>(null);
+  const [overrides, setOverrides] = useState<ManualOverrides>(loadOverrides);
+  const [heapUsage, setHeapUsage] = useState(getJSHeapUsage);
   const [expanded, setExpanded] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [editOverrides, setEditOverrides] = useState<ManualOverrides>({});
+  const [source, setSource] = useState<MetricSource>("browser");
 
+  // Poll local backend for real metrics
   useEffect(() => {
-    setInfo(getSystemInfo());
-    setHeapUsage(getJSHeapUsage());
-  }, []);
+    let active = true;
+    const poll = async () => {
+      const data = await fetchSystemMetrics();
+      if (!active) return;
+      setRealMetrics(data);
+      if (data) setSource("local");
+      else if (Object.keys(overrides).length > 0) setSource("override");
+      else setSource("browser");
+    };
+    poll();
+    const interval = setInterval(() => { poll(); setHeapUsage(getJSHeapUsage()); }, 3000);
+    return () => { active = false; clearInterval(interval); };
+  }, [overrides]);
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCpuSim((prev) => Math.max(3, Math.min(95, prev + (Math.random() - 0.5) * 10)));
-      setGpuUsageSim((prev) => Math.max(2, Math.min(60, prev + (Math.random() - 0.5) * 6)));
-      setHeapUsage(getJSHeapUsage());
-    }, 2500);
-    return () => clearInterval(interval);
-  }, []);
+  const handleSaveOverrides = () => {
+    const cleaned: ManualOverrides = {};
+    if (editOverrides.cpuName?.trim()) cleaned.cpuName = editOverrides.cpuName.trim();
+    if (editOverrides.ramTotalGB && editOverrides.ramTotalGB > 0) cleaned.ramTotalGB = editOverrides.ramTotalGB;
+    if (editOverrides.gpuName?.trim()) cleaned.gpuName = editOverrides.gpuName.trim();
+    if (editOverrides.vramMB && editOverrides.vramMB > 0) cleaned.vramMB = editOverrides.vramMB;
+    setOverrides(cleaned);
+    saveOverrides(cleaned);
+    setShowSettings(false);
+  };
 
-  if (!info) return null;
+  const handleClearOverrides = () => {
+    setOverrides({});
+    setEditOverrides({});
+    saveOverrides({});
+  };
 
-  const gpuShort = info.gpu
-    ? info.gpu.replace(/ANGLE \(/, "").replace(/\)$/, "").split(",")[0].trim()
-    : "N/A";
+  // Resolved values: local > override > browser
+  const cpuName = realMetrics?.cpu.name || overrides.cpuName || null;
+  const cpuCores = realMetrics?.cpu.threads || browserInfo.cpuCores;
+  const cpuUsage = realMetrics?.cpu.usage_percent ?? null;
 
-  const ramUsedGB = info.ramTotalGB ? (info.ramTotalGB * 0.55 + Math.random() * 0.1).toFixed(1) : null;
-  const vramUsedMB = info.vramMB ? Math.round(info.vramMB * gpuUsageSim / 100) : null;
+  const ramTotalGB = realMetrics?.ram.total_gb || overrides.ramTotalGB || browserInfo.deviceMemoryGB;
+  const ramUsedGB = realMetrics?.ram.used_gb ?? null;
+  const ramUsage = realMetrics?.ram.usage_percent ?? (ramTotalGB ? 55 : null);
+
+  const gpuName = realMetrics?.gpu?.name || overrides.gpuName || browserInfo.gpu;
+  const vramTotalMB = realMetrics?.gpu?.vram_total_mb || overrides.vramMB || browserInfo.vramMB;
+  const vramUsedMB = realMetrics?.gpu?.vram_used_mb ?? null;
+  const gpuUsage = realMetrics?.gpu?.gpu_usage_percent ?? null;
+  const gpuTemp = realMetrics?.gpu?.temperature_c ?? null;
+
+  const gpuShort = gpuName ? gpuName.replace(/ANGLE \(/, "").replace(/\)$/, "").split(",")[0].trim() : "N/A";
+
+  const sourceLabel = source === "local" ? "⚡ Live" : source === "override" ? "✏ Override" : "🌐 Browser";
+  const sourceColor = source === "local" ? "text-primary" : source === "override" ? "text-terminal-amber" : "text-muted-foreground";
 
   return (
     <div className="relative">
@@ -160,19 +156,19 @@ const SystemMetrics = () => {
       >
         <span className="flex items-center gap-1">
           <Cpu className="w-3 h-3 text-terminal-cyan" />
-          <span className="text-terminal-cyan">{Math.round(cpuSim)}%</span>
+          <span className="text-terminal-cyan">{cpuUsage !== null ? `${Math.round(cpuUsage)}%` : `${cpuCores}C`}</span>
         </span>
         <span className="flex items-center gap-1">
           <MemoryStick className="w-3 h-3 text-terminal-amber" />
           <span className="text-terminal-amber">
-            {info.ramTotalGB ? `${ramUsedGB}/${info.ramTotalGB}GB` : heapUsage ? `${heapUsage.usedMB}MB` : "N/A"}
+            {ramUsedGB !== null && ramTotalGB ? `${ramUsedGB.toFixed(1)}/${ramTotalGB}GB` : ramTotalGB ? `${ramTotalGB}GB` : "N/A"}
           </span>
         </span>
-        {info.vramMB && (
+        {vramTotalMB && (
           <span className="flex items-center gap-1">
             <MonitorSpeaker className="w-3 h-3 text-terminal-magenta" />
             <span className="text-terminal-magenta">
-              {vramUsedMB}MB/{(info.vramMB / 1024).toFixed(0)}GB
+              {vramUsedMB !== null ? `${(vramUsedMB / 1024).toFixed(1)}/${(vramTotalMB / 1024).toFixed(0)}GB` : `${(vramTotalMB / 1024).toFixed(0)}GB`}
             </span>
           </span>
         )}
@@ -180,26 +176,66 @@ const SystemMetrics = () => {
 
       {expanded && (
         <div className="absolute top-8 right-0 w-80 border border-border bg-card rounded p-3 z-50 shadow-lg">
-          <div className="flex items-center gap-2 mb-3">
-            <Activity className="w-3.5 h-3.5 text-primary" />
-            <span className="text-[10px] uppercase tracking-widest text-primary font-mono">
-              System Detection
-            </span>
+          {/* Header */}
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Activity className="w-3.5 h-3.5 text-primary" />
+              <span className="text-[10px] uppercase tracking-widest text-primary font-mono">System</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className={`text-[9px] font-mono ${sourceColor}`}>{sourceLabel}</span>
+              <button onClick={() => { setEditOverrides(overrides); setShowSettings(!showSettings); }} className="text-muted-foreground hover:text-foreground transition-colors">
+                <Settings className="w-3 h-3" />
+              </button>
+            </div>
           </div>
+
+          {/* Settings panel */}
+          {showSettings && (
+            <div className="mb-3 p-2.5 border border-border rounded bg-muted/30 space-y-2">
+              <div className="text-[9px] uppercase tracking-widest text-terminal-amber font-mono mb-1">Manual Overrides</div>
+              <div>
+                <label className="text-[9px] text-muted-foreground uppercase tracking-widest block mb-0.5">CPU Name</label>
+                <input value={editOverrides.cpuName || ""} onChange={(e) => setEditOverrides({ ...editOverrides, cpuName: e.target.value })} placeholder="e.g. Intel i7-12700K" className="w-full bg-input border border-border rounded px-2 py-1 text-[10px] text-foreground font-mono focus:outline-none focus:border-primary" />
+              </div>
+              <div>
+                <label className="text-[9px] text-muted-foreground uppercase tracking-widest block mb-0.5">Total RAM (GB)</label>
+                <input type="number" value={editOverrides.ramTotalGB || ""} onChange={(e) => setEditOverrides({ ...editOverrides, ramTotalGB: parseFloat(e.target.value) || undefined })} placeholder="e.g. 32" className="w-full bg-input border border-border rounded px-2 py-1 text-[10px] text-foreground font-mono focus:outline-none focus:border-primary" />
+              </div>
+              <div>
+                <label className="text-[9px] text-muted-foreground uppercase tracking-widest block mb-0.5">GPU Name</label>
+                <input value={editOverrides.gpuName || ""} onChange={(e) => setEditOverrides({ ...editOverrides, gpuName: e.target.value })} placeholder="e.g. NVIDIA RTX 4070" className="w-full bg-input border border-border rounded px-2 py-1 text-[10px] text-foreground font-mono focus:outline-none focus:border-primary" />
+              </div>
+              <div>
+                <label className="text-[9px] text-muted-foreground uppercase tracking-widest block mb-0.5">VRAM (MB)</label>
+                <input type="number" value={editOverrides.vramMB || ""} onChange={(e) => setEditOverrides({ ...editOverrides, vramMB: parseFloat(e.target.value) || undefined })} placeholder="e.g. 12288" className="w-full bg-input border border-border rounded px-2 py-1 text-[10px] text-foreground font-mono focus:outline-none focus:border-primary" />
+              </div>
+              <div className="flex gap-2 pt-1">
+                <button onClick={handleClearOverrides} className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded border border-border text-muted-foreground hover:text-foreground text-[9px] font-mono uppercase">
+                  <RotateCcw className="w-2.5 h-2.5" /> Reset
+                </button>
+                <button onClick={handleSaveOverrides} className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded border border-primary bg-primary/10 text-primary text-[9px] font-mono uppercase">
+                  <Save className="w-2.5 h-2.5" /> Save
+                </button>
+              </div>
+            </div>
+          )}
 
           <div className="space-y-3">
             {/* CPU */}
             <div>
               <div className="flex justify-between text-[10px] font-mono mb-1">
                 <span className="text-terminal-cyan">CPU</span>
-                <span className="text-muted-foreground">{info.cpuCores} threads · {Math.round(cpuSim)}%</span>
+                <span className="text-muted-foreground">
+                  {cpuName ? cpuName : `${cpuCores} threads`}
+                  {cpuUsage !== null ? ` · ${Math.round(cpuUsage)}%` : ""}
+                </span>
               </div>
-              <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-                <div
-                  className="h-full rounded-full transition-all duration-1000"
-                  style={{ width: `${cpuSim}%`, backgroundColor: `hsl(var(--terminal-cyan))` }}
-                />
-              </div>
+              {cpuUsage !== null && (
+                <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                  <div className="h-full rounded-full transition-all duration-1000" style={{ width: `${cpuUsage}%`, backgroundColor: `hsl(var(--terminal-cyan))` }} />
+                </div>
+              )}
             </div>
 
             {/* RAM */}
@@ -207,22 +243,16 @@ const SystemMetrics = () => {
               <div className="flex justify-between text-[10px] font-mono mb-1">
                 <span className="text-terminal-amber">RAM</span>
                 <span className="text-muted-foreground">
-                  {info.ramTotalGB ? `${ramUsedGB} / ${info.ramTotalGB} GB` : "Detection limited"}
+                  {ramUsedGB !== null && ramTotalGB ? `${ramUsedGB.toFixed(1)} / ${ramTotalGB} GB` : ramTotalGB ? `${ramTotalGB} GB total` : "Unknown"}
                 </span>
               </div>
-              <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-                <div
-                  className="h-full rounded-full transition-all duration-1000"
-                  style={{
-                    width: info.ramTotalGB ? `${(parseFloat(ramUsedGB || "0") / info.ramTotalGB) * 100}%` : "50%",
-                    backgroundColor: `hsl(var(--terminal-amber))`,
-                  }}
-                />
-              </div>
-              {heapUsage && (
-                <div className="text-[9px] text-muted-foreground mt-1">
-                  JS Heap: {heapUsage.usedMB}MB / {heapUsage.totalMB}MB
+              {ramUsage !== null && ramTotalGB && (
+                <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                  <div className="h-full rounded-full transition-all duration-1000" style={{ width: `${ramUsedGB !== null ? (ramUsedGB / ramTotalGB) * 100 : ramUsage}%`, backgroundColor: `hsl(var(--terminal-amber))` }} />
                 </div>
+              )}
+              {heapUsage && (
+                <div className="text-[9px] text-muted-foreground mt-1">JS Heap: {heapUsage.usedMB}MB / {heapUsage.totalMB}MB</div>
               )}
             </div>
 
@@ -231,27 +261,20 @@ const SystemMetrics = () => {
               <div className="flex justify-between text-[10px] font-mono mb-1">
                 <span className="text-terminal-magenta">GPU</span>
                 <span className="text-muted-foreground">
-                  {info.vramMB ? `VRAM: ${(info.vramMB / 1024).toFixed(0)} GB` : "VRAM: N/A"}
+                  {vramTotalMB ? `VRAM: ${(vramTotalMB / 1024).toFixed(1)} GB` : "VRAM: N/A"}
                 </span>
               </div>
-              <p className="text-[10px] text-foreground font-mono break-words mb-1">
-                {gpuShort || "Not detected"}
-              </p>
-              {info.gpuVendor && (
-                <p className="text-[9px] text-muted-foreground font-mono">
-                  Vendor: {info.gpuVendor}
-                </p>
+              <p className="text-[10px] text-foreground font-mono break-words mb-1">{gpuShort || "Not detected"}</p>
+              {gpuTemp !== null && (
+                <p className="text-[9px] text-muted-foreground font-mono">Temp: {gpuTemp}°C</p>
               )}
-              {info.vramMB && (
+              {(gpuUsage !== null || vramUsedMB !== null) && vramTotalMB && (
                 <>
                   <div className="h-1.5 bg-muted rounded-full overflow-hidden mt-1.5">
-                    <div
-                      className="h-full rounded-full transition-all duration-1000"
-                      style={{ width: `${gpuUsageSim}%`, backgroundColor: `hsl(var(--terminal-magenta))` }}
-                    />
+                    <div className="h-full rounded-full transition-all duration-1000" style={{ width: `${vramUsedMB !== null ? (vramUsedMB / vramTotalMB) * 100 : gpuUsage}%`, backgroundColor: `hsl(var(--terminal-magenta))` }} />
                   </div>
                   <div className="text-[9px] text-muted-foreground mt-1">
-                    VRAM Usage: ~{vramUsedMB}MB / {info.vramMB}MB ({Math.round(gpuUsageSim)}%)
+                    {vramUsedMB !== null ? `VRAM: ${vramUsedMB}MB / ${vramTotalMB}MB` : ""}{gpuUsage !== null ? ` · GPU: ${Math.round(gpuUsage)}%` : ""}
                   </div>
                 </>
               )}
@@ -261,32 +284,26 @@ const SystemMetrics = () => {
             <div className="pt-2 border-t border-border space-y-1">
               <div className="flex justify-between text-[10px] font-mono">
                 <span className="text-muted-foreground">Platform</span>
-                <span className="text-foreground">{info.platform}</span>
+                <span className="text-foreground">{realMetrics?.platform || browserInfo.platform}</span>
               </div>
+              {realMetrics?.hostname && (
+                <div className="flex justify-between text-[10px] font-mono">
+                  <span className="text-muted-foreground">Hostname</span>
+                  <span className="text-foreground">{realMetrics.hostname}</span>
+                </div>
+              )}
               <div className="flex justify-between text-[10px] font-mono">
                 <span className="text-muted-foreground">Browser</span>
-                <span className="text-foreground">{info.browser}</span>
+                <span className="text-foreground">{browserInfo.browser}</span>
               </div>
               <div className="flex justify-between text-[10px] font-mono">
                 <span className="text-muted-foreground">Cores / Threads</span>
-                <span className="text-foreground">{info.cpuCores}</span>
+                <span className="text-foreground">{cpuCores}</span>
               </div>
-              {info.ramTotalGB && (
-                <div className="flex justify-between text-[10px] font-mono">
-                  <span className="text-muted-foreground">System RAM</span>
-                  <span className="text-foreground">{info.ramTotalGB} GB</span>
-                </div>
-              )}
-              {info.vramMB && (
-                <div className="flex justify-between text-[10px] font-mono">
-                  <span className="text-muted-foreground">GPU VRAM</span>
-                  <span className="text-foreground">{(info.vramMB / 1024).toFixed(1)} GB</span>
-                </div>
-              )}
             </div>
 
             <div className="pt-1 text-[8px] text-muted-foreground/60 font-mono text-center">
-              * Browser-based detection · some values estimated
+              {source === "local" ? "Live data from local backend" : source === "override" ? "Using manual overrides · ⚙ to edit" : "Browser-limited · ⚙ to set real specs"}
             </div>
           </div>
         </div>
