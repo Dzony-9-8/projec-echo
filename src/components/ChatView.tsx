@@ -63,7 +63,7 @@ const ChatView = () => {
   };
 
   const filteredMessages = messages.filter(
-    (m) => !m.agent || m.agent === "System" || activeAgents.has(m.agent)
+    (m) => !m.agent || m.agent === "System" || m.agent === "ECHO Cloud" || activeAgents.has(m.agent)
   );
 
   // Export conversation
