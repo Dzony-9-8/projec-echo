@@ -1,6 +1,8 @@
-import { useState, useEffect, useCallback } from "react";
-import { Cpu, Activity, MonitorSpeaker, MemoryStick, Settings, Save, RotateCcw, Thermometer, HardDrive, Wifi } from "lucide-react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { Cpu, Activity, MonitorSpeaker, MemoryStick, Settings, Save, RotateCcw, Thermometer, HardDrive, Wifi, AlertTriangle } from "lucide-react";
 import { fetchSystemMetrics, getBackendMode, measureCloudLatency, type RealSystemMetrics } from "@/lib/api";
+import LatencyChart from "./LatencyChart";
+import { toast } from "sonner";
 
 /* ─── Types ─── */
 interface BrowserInfo {
@@ -23,7 +25,6 @@ interface ManualOverrides {
 type MetricSource = "local" | "override" | "browser";
 
 /* ─── Helpers ─── */
-
 const usageColor = (percent: number): string => {
   if (percent >= 85) return "hsl(var(--terminal-red))";
   if (percent >= 60) return "hsl(var(--terminal-amber))";
@@ -138,6 +139,23 @@ const UsageBar = ({ percent, label, detail, showTemp, tempC }: { percent: number
   );
 };
 
+/* ─── Threshold alerts ─── */
+const ALERT_COOLDOWN = 60000; // 1 min between alerts
+const alertTimestamps: Record<string, number> = {};
+
+const checkThreshold = (label: string, value: number, threshold: number) => {
+  if (value >= threshold) {
+    const now = Date.now();
+    if (!alertTimestamps[label] || now - alertTimestamps[label] > ALERT_COOLDOWN) {
+      alertTimestamps[label] = now;
+      toast.warning(`${label} at ${Math.round(value)}% — exceeds threshold`, {
+        icon: <AlertTriangle className="w-4 h-4 text-terminal-amber" />,
+        duration: 5000,
+      });
+    }
+  }
+};
+
 /* ─── Component ─── */
 const SystemMetrics = () => {
   const [browserInfo] = useState<BrowserInfo>(getBrowserInfo);
@@ -149,8 +167,9 @@ const SystemMetrics = () => {
   const [editOverrides, setEditOverrides] = useState<ManualOverrides>({});
   const [source, setSource] = useState<MetricSource>("browser");
   const [latencyMs, setLatencyMs] = useState<number | null>(null);
+  const [latencyHistory, setLatencyHistory] = useState<number[]>([]);
+  const latencyHistoryRef = useRef<number[]>([]);
 
-  // Poll local backend for real metrics — only in local mode
   const poll = useCallback(async () => {
     const mode = getBackendMode();
     setHeapUsage(getJSHeapUsage());
@@ -158,17 +177,26 @@ const SystemMetrics = () => {
     if (mode === "local") {
       const data = await fetchSystemMetrics();
       setRealMetrics(data);
-      if (data) setSource("local");
-      else if (Object.keys(overrides).length > 0) setSource("override");
+      if (data) {
+        setSource("local");
+        // Threshold alerts for local mode
+        checkThreshold("CPU", data.cpu.usage_percent, 90);
+        checkThreshold("RAM", data.ram.usage_percent, 90);
+        if (data.gpu) checkThreshold("GPU", data.gpu.gpu_usage_percent, 95);
+        if (data.disk) checkThreshold("Disk", data.disk.usage_percent, 90);
+      } else if (Object.keys(overrides).length > 0) setSource("override");
       else setSource("browser");
       setLatencyMs(null);
     } else {
-      // Cloud mode: no local metrics, measure cloud latency instead
       setRealMetrics(null);
       if (Object.keys(overrides).length > 0) setSource("override");
       else setSource("browser");
       const ping = await measureCloudLatency();
       setLatencyMs(ping);
+      if (ping !== null) {
+        latencyHistoryRef.current = [...latencyHistoryRef.current.slice(-29), ping];
+        setLatencyHistory([...latencyHistoryRef.current]);
+      }
     }
   }, [overrides]);
 
@@ -223,48 +251,36 @@ const SystemMetrics = () => {
         onClick={() => setExpanded(!expanded)}
         className="flex items-center gap-3 text-[10px] font-mono text-muted-foreground hover:text-foreground transition-colors"
       >
-        {/* CPU */}
         <span className="flex items-center gap-1">
           <Cpu className="w-3 h-3 text-terminal-cyan" />
           <span className={cpuPctDisplay !== null ? usageTextClass(cpuPctDisplay) : "text-terminal-cyan"}>
             {cpuPctDisplay !== null ? `${cpuPctDisplay}%` : `${cpuCores}C`}
           </span>
         </span>
-        {/* RAM */}
         <span className="flex items-center gap-1">
           <MemoryStick className="w-3 h-3 text-terminal-amber" />
           <span className="text-terminal-amber">
             {ramUsedGB !== null && ramTotalGB ? `${ramUsedGB.toFixed(1)}/${ramTotalGB}GB` : ramTotalGB ? `${ramTotalGB}GB` : "N/A"}
           </span>
         </span>
-        {/* VRAM */}
         {vramTotalMB && (
-          <span className="flex items-center gap-1">
+          <span className="flex items-center gap-1 hidden sm:flex">
             <MonitorSpeaker className="w-3 h-3 text-terminal-magenta" />
             <span className="text-terminal-magenta">
               {vramUsedMB !== null ? `${(vramUsedMB / 1024).toFixed(1)}/${(vramTotalMB / 1024).toFixed(0)}GB` : `${(vramTotalMB / 1024).toFixed(0)}GB`}
             </span>
           </span>
         )}
-        {/* Latency in top bar (cloud mode) */}
         {latencyMs !== null && (
           <span className={`flex items-center gap-0.5 ${latencyTextClass(latencyMs)}`}>
             <Wifi className="w-3 h-3" />
             {latencyMs}ms
           </span>
         )}
-        {/* CPU Temp in top bar when live */}
         {cpuTemp !== null && (
-          <span className={`flex items-center gap-0.5 ${tempTextClass(cpuTemp)}`}>
+          <span className={`flex items-center gap-0.5 hidden sm:flex ${tempTextClass(cpuTemp)}`}>
             <Thermometer className="w-3 h-3" />
             {cpuTemp}°C
-          </span>
-        )}
-        {/* GPU Temp in top bar when live */}
-        {gpuTemp !== null && (
-          <span className={`flex items-center gap-0.5 ${tempTextClass(gpuTemp)}`}>
-            <Thermometer className="w-3 h-3" />
-            {gpuTemp}°C
           </span>
         )}
       </button>
@@ -285,14 +301,22 @@ const SystemMetrics = () => {
             </div>
           </div>
 
-          {/* Network Latency (cloud mode) */}
+          {/* Network Latency with sparkline (cloud mode) */}
           {latencyMs !== null && (
-            <div className="mb-3 flex items-center gap-2 p-1.5 rounded border border-border bg-muted/30">
-              <Wifi className={`w-3.5 h-3.5 ${latencyTextClass(latencyMs)}`} />
-              <div className="flex-1 flex justify-between text-[10px] font-mono">
-                <span className={latencyTextClass(latencyMs)}>Cloud Latency</span>
-                <span className={`font-bold ${latencyTextClass(latencyMs)}`}>{latencyMs}ms</span>
+            <div className="mb-3 p-2 rounded border border-border bg-muted/30 space-y-1.5">
+              <div className="flex items-center gap-2">
+                <Wifi className={`w-3.5 h-3.5 ${latencyTextClass(latencyMs)}`} />
+                <div className="flex-1 flex justify-between text-[10px] font-mono">
+                  <span className={latencyTextClass(latencyMs)}>Cloud Latency</span>
+                  <span className={`font-bold ${latencyTextClass(latencyMs)}`}>{latencyMs}ms</span>
+                </div>
               </div>
+              {latencyHistory.length > 1 && (
+                <LatencyChart
+                  data={latencyHistory}
+                  color={latencyMs >= 500 ? "hsl(var(--terminal-red))" : latencyMs >= 200 ? "hsl(var(--terminal-amber))" : "hsl(var(--primary))"}
+                />
+              )}
             </div>
           )}
 
@@ -330,15 +354,13 @@ const SystemMetrics = () => {
           <div className="space-y-3">
             {/* CPU */}
             {cpuUsage !== null ? (
-              <div>
-                <UsageBar
-                  percent={cpuUsage}
-                  label={`CPU${cpuName ? ` · ${cpuName}` : ""}`}
-                  detail={`${cpuCores} threads`}
-                  showTemp={cpuTemp !== null}
-                  tempC={cpuTemp}
-                />
-              </div>
+              <UsageBar
+                percent={cpuUsage}
+                label={`CPU${cpuName ? ` · ${cpuName}` : ""}`}
+                detail={`${cpuCores} threads`}
+                showTemp={cpuTemp !== null}
+                tempC={cpuTemp}
+              />
             ) : (
               <div>
                 <div className="flex justify-between text-[10px] font-mono mb-1">
@@ -355,11 +377,7 @@ const SystemMetrics = () => {
             {/* RAM */}
             {ramPercent !== null && ramTotalGB ? (
               <div>
-                <UsageBar
-                  percent={ramPercent}
-                  label="RAM"
-                  detail={ramUsedGB !== null ? `${ramUsedGB.toFixed(1)} / ${ramTotalGB} GB` : `${ramTotalGB} GB total`}
-                />
+                <UsageBar percent={ramPercent} label="RAM" detail={ramUsedGB !== null ? `${ramUsedGB.toFixed(1)} / ${ramTotalGB} GB` : `${ramTotalGB} GB total`} />
                 {heapUsage && (
                   <div className="text-[9px] text-muted-foreground mt-1 font-mono">JS Heap: {heapUsage.usedMB}MB / {heapUsage.totalMB}MB</div>
                 )}
@@ -394,11 +412,7 @@ const SystemMetrics = () => {
 
               {vramUsedMB !== null && vramTotalMB && (
                 <div className="mt-2">
-                  <UsageBar
-                    percent={(vramUsedMB / vramTotalMB) * 100}
-                    label="VRAM"
-                    detail={`${vramUsedMB}MB / ${vramTotalMB}MB`}
-                  />
+                  <UsageBar percent={(vramUsedMB / vramTotalMB) * 100} label="VRAM" detail={`${vramUsedMB}MB / ${vramTotalMB}MB`} />
                 </div>
               )}
 
@@ -430,11 +444,7 @@ const SystemMetrics = () => {
             {/* Disk Usage (local only) */}
             {disk && (
               <div>
-                <UsageBar
-                  percent={disk.usage_percent}
-                  label="Disk"
-                  detail={`${disk.used_gb} / ${disk.total_gb} GB`}
-                />
+                <UsageBar percent={disk.usage_percent} label="Disk" detail={`${disk.used_gb} / ${disk.total_gb} GB`} />
                 <div className="text-[9px] text-muted-foreground mt-0.5 font-mono">{disk.free_gb} GB free</div>
               </div>
             )}

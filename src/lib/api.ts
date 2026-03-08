@@ -184,7 +184,8 @@ const parseSSEStream = async (
 const sendCloudMessage = async (
   messages: ChatMessage[],
   depth: number,
-  onChunk?: (text: string) => void
+  onChunk?: (text: string) => void,
+  model?: string
 ): Promise<string> => {
   const response = await fetch(CLOUD_CHAT_URL, {
     method: "POST",
@@ -195,6 +196,7 @@ const sendCloudMessage = async (
     body: JSON.stringify({
       messages: messages.map((m) => ({ role: m.role, content: m.content })),
       depth,
+      model,
     }),
   });
 
@@ -252,7 +254,8 @@ const sendLocalMessage = async (
 export const sendMessage = async (
   messages: ChatMessage[],
   onChunk?: (text: string) => void,
-  depth: number = 1
+  depth: number = 1,
+  model?: string
 ): Promise<string> => {
   const mode = getBackendMode();
 
@@ -260,7 +263,7 @@ export const sendMessage = async (
     return sendLocalMessage(messages, onChunk);
   }
 
-  return sendCloudMessage(messages, depth, onChunk);
+  return sendCloudMessage(messages, depth, onChunk, model);
 };
 
 // Check backend health
