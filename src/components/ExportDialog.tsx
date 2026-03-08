@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { X, Download, FileText, FileJson, File } from "lucide-react";
+import { X, Download, FileText, FileJson, File, Copy } from "lucide-react";
 import { type ChatMessage } from "@/lib/api";
 import { toast } from "sonner";
 import jsPDF from "jspdf";
