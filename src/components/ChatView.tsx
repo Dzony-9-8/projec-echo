@@ -246,14 +246,18 @@ const ChatView = () => {
       model: mode === "cloud" ? (model?.split("/").pop() || "Gemini 3 Flash") : "LLaMA 3.1",
     };
 
-    // Prepend system prompt if set
+    // Prepend system prompt + agent skills if set
     const effectivePrompt = getEffectiveSystemPrompt();
+    const agentName = mode === "cloud" ? "ECHO Cloud" : "Supervisor";
+    const skillsPrompt = buildSkillsPrompt(agentName);
+    const fullSystemPrompt = (effectivePrompt + skillsPrompt).trim();
+
     let allBefore = [...prevMessages, userMsg];
-    if (effectivePrompt) {
+    if (fullSystemPrompt) {
       const sysMsg: ChatMessageType = {
         id: "system-prompt",
         role: "system",
-        content: effectivePrompt,
+        content: fullSystemPrompt,
         timestamp: new Date(),
       };
       allBefore = [sysMsg, ...allBefore.filter(m => m.id !== "system-prompt")];
